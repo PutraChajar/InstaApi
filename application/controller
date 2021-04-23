@@ -1,0 +1,3720 @@
+<?php
+
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+require APPPATH . '/libraries/REST_Controller.php';
+
+class Api extends REST_Controller {
+
+    public function __construct() {
+        parent::__construct();
+        $this->load->model('Api_model');
+        $this->load->helper('token');
+    }
+
+    public function check_old_password_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+
+                $length = $this->Api_model->check_old_password($id)->num_rows();
+
+                if ( $length == 1 ) {
+                    $response['status'] = 'yes';
+                    $response['message'] = 'Old password correct';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'no';
+                    $response['message'] = 'Old password incorrect';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function change_password_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+
+                $data = $this->Api_model->change_password($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Change password successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during change password';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function check_username_post() {
+        $length = $this->Api_model->check_username()->num_rows();
+
+        if ( $length == 0 ) {
+            $response['status'] = 'yes';
+            $response['message'] = 'Username available';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        } else {
+            $response['status'] = 'no';
+            $response['message'] = 'Username already taken';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        }
+    }
+
+    public function check_email_post() {
+        $length = $this->Api_model->check_email()->num_rows();
+
+        if ( $length == 0 ) {
+            $response['status'] = 'yes';
+            $response['message'] = 'Email available';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        } else {
+            $response['status'] = 'no';
+            $response['message'] = 'Email already taken';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        }
+    }
+
+    public function check_phone_post() {
+        $length = $this->Api_model->check_phone()->num_rows();
+
+        if ( $length == 0 ) {
+            $response['status'] = 'yes';
+            $response['message'] = 'Phone available';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        } else {
+            $response['status'] = 'no';
+            $response['message'] = 'Phone already taken';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        }
+    }
+
+    public function signup_post() {
+        $data = $this->Api_model->signup();
+
+        if ( $data['result'] ) {
+            $response['data'] = $data['iduser'];
+            $response['status'] = 'success';
+            $response['message'] = 'Registration successful';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        } else {
+            $response['status'] = 'failed';
+            $response['message'] = 'An error occurred during user registration';
+            $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public function email_verification_post() {
+        $length = $this->Api_model->check_email_verification()->num_rows();
+        $data = $this->Api_model->check_email_verification()->row_array();
+        
+        if ( $length == 0 ) {
+            $response['status'] = 'incorrect';
+            $response['message'] = 'Incorrect verification code';
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        } else {
+            if ( $data['IS_ACTIVE'] == 'Y' ) {
+                $data = $this->Api_model->email_verification();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Email verification successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during email verification';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                }
+            } else {
+                $response['status'] = 'not_active';
+                $response['message'] = 'This link has already been verified';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            }
+        }
+    }
+
+    public function signin_post() {
+        $username = $this->input->post('username');
+        $password = sha1($this->input->post('password'));
+        $isadmin = $this->input->post('isadmin');
+        $os = $this->input->post('os');
+        $browser = $this->input->post('browser');
+        $location = $this->input->post('location');
+
+        $length = $this->Api_model->signin($username,$password,$isadmin)->num_rows();
+        $data = $this->Api_model->signin($username,$password,$isadmin)->row_array();
+
+        $tokenData = array();
+        $tokenData['iduser'] = $data['ID_USER'].'@'.now();
+        
+        if ( $length > 0 ) {
+            if ( $data['IS_ACTIVE'] == 'Y' ) {
+                $iduser = $data['ID_USER'];
+                $token = AUTHORIZATION::generateToken($tokenData);
+                $status = 'success';
+                $message = 'Login successful';
+
+                $this->Api_model->session_token($iduser, $token);
+                $this->Api_model->log_login($username, $os, $browser, $location, $status, $message);
+
+                $response['data'] = $token;
+                $response['status'] = $status;
+                $response['message'] = $message;
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $status = 'not_active';
+                $message = 'Your account is not active, wait for it to be validated';
+                $data = $this->Api_model->log_login($username, $os, $browser, $location, $status, $message);
+
+                $response['status'] = $status;
+                $response['message'] = $message;
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            }
+        } else {
+            $status = 'failed';
+            $message = 'Invalid username or password';
+            $data = $this->Api_model->log_login($username, $os, $browser, $location, $status, $message);
+
+            $response['status'] = $status;
+            $response['message'] = $message;
+            $this->set_response($response, REST_Controller::HTTP_OK);
+        }
+    }
+
+    public function signout_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+
+                $data = $this->Api_model->signout($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Logout successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during logout';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function data_user_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                $data = $this->Api_model->data_user($id)->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data user successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function parent_menu_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                $data = $this->Api_model->parent_menu($id)->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data parent menu successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function child_menu_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                $data = $this->Api_model->child_menu($id)->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data child menu successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_post_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_post()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data post successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_social_media_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_social_media()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data social media successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_filter_category_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_filter_category()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data catagories successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_filter_collection_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_filter_collection()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data collection successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_photo_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product_photo()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product photo successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_size_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product_size()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product size successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_detail_product_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_detail_product()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data detail product successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_photo_detail_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product_photo_detail()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product photo detail successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_purity_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product_purity()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product purity successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_weight_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_weight()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data weight successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_finishing_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product_finishing()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product finishing successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_size_detail_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product_size_detail()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product size detail successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_product_stones_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_product_stones()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data product lock successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function add_to_cart_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+
+                $length = $this->Api_model->check_cart($id)->num_rows();
+                $data = $this->Api_model->check_cart($id)->row_array();
+                
+                if ( $length == 0 ) {
+                    $data = $this->Api_model->generate_id_transaction()->row_array();
+                    $id_transaction = $data['ID_TRANSACTION'];
+                    $data = $this->Api_model->add_to_cart($id,$id_transaction);
+                    
+                    if ( $data ) {
+                        $response['status'] = 'success';
+                        $response['message'] = 'Insert data cart successful';
+                        $this->set_response($response, REST_Controller::HTTP_OK);
+                    } else {
+                        $response['status'] = 'failed';
+                        $response['message'] = 'An error occurred during insert data cart';
+                        $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                    }
+                } else {
+                    $id_transaction = $data['ID_TRANSACTION'];
+
+                    $length2 = $this->Api_model->check_sub_cart($id_transaction)->num_rows();
+                    $data2 = $this->Api_model->check_sub_cart($id_transaction)->row_array();
+                    $sub_transaction = $data2['SUB_TRANSACTION'];
+
+                    if ( $length2 == 0 ) {
+                        $data = $this->Api_model->add_to_cart($id,$id_transaction);
+
+                        if ( $data ) {
+                            $response['status'] = 'success';
+                            $response['message'] = 'Insert data cart successful';
+                            $this->set_response($response, REST_Controller::HTTP_OK);
+                        } else {
+                            $response['status'] = 'failed';
+                            $response['message'] = 'An error occurred during insert data cart';
+                            $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                        }
+                    } else {
+                        $data = $this->Api_model->update_to_cart($id_transaction,$sub_transaction);
+                        
+                        if ( $data ) {
+                            $response['status'] = 'success';
+                            $response['message'] = 'Update data cart successful';
+                            $this->set_response($response, REST_Controller::HTTP_OK);
+                        } else {
+                            $response['status'] = 'failed';
+                            $response['message'] = 'An error occurred during update data cart';
+                            $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                        }
+                    }
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function count_cart_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                
+                $data = $this->Api_model->count_cart($id)->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get count cart successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function sum_design_total_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                
+                $data = $this->Api_model->sum_design_total($id)->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get summary total design successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function sum_total_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                
+                $data = $this->Api_model->sum_total($id)->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get summary total successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_item_cart_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+
+                $data = $this->Api_model->load_item_cart($id)->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data item cart successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_item_sub_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_item_sub()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data sub cart successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function update_cart_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->update_cart();
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Update data cart successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during update data cart';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_cart_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_cart();
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete data cart successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete data cart';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function update_note_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->update_note();
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Update note successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during update note';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function checkout_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                
+                $data = $this->Api_model->checkout($id);
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Checkout successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during checkout';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_item_order_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_item_order()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data item order successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function load_total_order_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->load_total_order()->result();
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data total order successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_user_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_user();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_USER,
+                        $row->NAME,
+                        $row->USERNAME,
+                        $row->PASSWORD,
+                        $row->ADDRESS,
+                        $row->EMAIL,
+                        $row->PHONE,
+                        $row->IS_ADMIN
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master user successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_user_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                
+                $data = $this->Api_model->insert_user($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert user successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert user';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function update_user_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->update_user();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Update user successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during update user';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_user_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_user();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete user successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete user';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_category_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_category();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_CATEGORY,
+                        $row->NAME_CATEGORY
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master category successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_category_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_category();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Category successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert category';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function auto_IdCat_post() {
+        $data = $this->Api_model->autogen_IdCat();
+        $response['Id_Cat'] =  $data;
+        $response['status'] = 'success';
+        $response['message'] = 'Get id category successful';
+        $this->set_response($response, REST_Controller::HTTP_OK);
+    }
+
+    public function update_category_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->edit_master_Cat();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Category successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit category';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_category_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_Cat();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Category successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete category';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_collection_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_collection();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_COLLECTION,
+                        $row->NAME_COLLECTION
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master collection successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_collection_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_collection();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Collection successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert collection';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function auto_IdCol_post() {
+        $data = $this->Api_model->autogen_IdCol();
+        $response['Id_Col'] =  $data;
+        $response['status'] = 'success';
+        $response['message'] = 'Get id category successful';
+        $this->set_response($response, REST_Controller::HTTP_OK);
+    }
+
+    public function update_collection_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->edit_master_Col();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Collection successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit collection';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_collection_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_Col();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Collection successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete collection';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_finishing_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_finishing();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_FINISHING,
+                        $row->NAME_FINISHING
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master finishing successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_finishing_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_finishing();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Finishing successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert finishing';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function auto_IdFin_post() {
+        $data = $this->Api_model->autogen_IdFin();
+        $response['Id_Fin'] =  $data;
+        $response['status'] = 'success';
+        $response['message'] = 'Get id finishing successful';
+        $this->set_response($response, REST_Controller::HTTP_OK);
+    }
+
+    public function update_finishing_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->edit_master_Fin();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Finishing successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit finishing';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_finishing_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_Fin();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Finishing successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete finishing';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_lock_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_lock();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_LOCK,
+                        $row->NAME_LOCK
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master lock successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_lock_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_lock();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Lock successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert lock';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function auto_IdLoc_post() {
+        $data = $this->Api_model->autogen_IdLoc();
+        $response['Id_Loc'] =  $data;
+        $response['status'] = 'success';
+        $response['message'] = 'Get id lock successful';
+        $this->set_response($response, REST_Controller::HTTP_OK);
+    }
+
+    public function update_lock_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->edit_master_Loc();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Lock successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit lock';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_lock_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_Loc();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Lock successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete lock';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_purity_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_purity();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->PURITY
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master lock successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function cek_purity_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $length = $this->Api_model->cek_pur()->num_rows();
+
+                if ( $length == 0 ) {
+                    $response['status'] = 'yes';
+                    $response['message'] = 'Purity can get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'no';
+                    $response['message'] = 'Purity can not get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_purity_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_purity();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Purity successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert purity';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_purity_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_Pur();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Purity successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete purity';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_size_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_size();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->SIZE,
+                        $row->ID_CATEGORY,
+                        $row->NAME_CATEGORY
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master size successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function cek_size_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $length = $this->Api_model->cek_size()->num_rows();
+
+                if ( $length == 0 ) {
+                    $response['status'] = 'yes';
+                    $response['message'] = 'Size can get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'no';
+                    $response['message'] = 'Size can not get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_size_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_size();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Size successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert size';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_size_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_Size();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Size successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete size';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_unit_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_unit();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->UNIT,
+                        $row->NAME_UNIT
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master unit successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_stones_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_stones();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->SIZE_STONES
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master stones successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function cek_stones_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $length = $this->Api_model->cek_sto()->num_rows();
+
+                if ( $length == 0 ) {
+                    $response['status'] = 'yes';
+                    $response['message'] = 'Size stones can get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'no';
+                    $response['message'] = 'Size stones can not get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_stones_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_stones();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Stones successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert stones';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_stones_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_Sto();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Stones successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete stones';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function menu_posting_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->menu_posting();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp,
+                        $row->ID_POSTING,
+                        $row->NAME_CATEGORY, 
+                        $row->NAME_COLLECTION,
+                        $row->FILE_NAME,
+                        $row->IS_ACTIVE,
+                        $row->USER_IN,
+                        $row->ID_CATEGORY,
+                        $row->ID_COLLECTION
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get menu posting successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_posting_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                $data = $this->Api_model->insert_menu_posting($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Posting successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert posting';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function uploadfoto_posting_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $Id_Post = $this->input->post('id_Post', true);
+                $Id_Cat = $this->input->post('id_Cat', true);
+                $Id_Col = $this->input->post('id_Col', true);
+                $edit = $this->input->post('edit', true);
+
+                if($edit == 0){
+                    $nilai = json_decode($_POST['foto'], true);
+                }
+                else{
+                    $nilai = json_decode($_POST['fotoe'], true);
+                }
+
+                foreach($nilai as $key => $value) {
+                    $image = $nilai[$key];
+                    $nomer = $key + 1;
+                    $nama = $Id_Post.'-'.$Id_Cat.'-'.$Id_Col.'('.$nomer.')';
+                    $location = 'posting/';
+                    $filename = $nama.'.jpg';
+                    $file = $location . $filename;
+                    
+                    if ( file_exists($file) ) {
+                        unlink($file);
+                    } 
+
+                    $image_parts = explode(';base64,', $image);
+                    $image_base64 = base64_decode($image_parts[1]);
+                   
+
+                    if(file_put_contents($file, $image_base64)){
+                        $data_insert_file = $this->Api_model->upload_foto_posting($filename);
+                        $data = array('upload_data' => $file);
+                        $this->set_response($data, REST_Controller::HTTP_CREATED); 
+                    }else{
+                        $error = array('error' => $file);
+                        $this->response($error, REST_Controller::HTTP_BAD_REQUEST);
+                    }
+                    
+                }
+
+
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function auto_IdPost_post() {
+        $data = $this->Api_model->autogen_IdPost();
+        $response['Id_Post'] =  $data;
+        $response['status'] = 'success';
+        $response['message'] = 'Get id posting successful';
+        $this->set_response($response, REST_Controller::HTTP_OK);
+    }
+
+    public function update_posting_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->edit_menu_Post();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Posting successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit posting';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_posting_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_menu_Post();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Posting successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete posting';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function menu_story_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->menu_story();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp,
+                        $row->ID_STORY,
+                        $row->NAME_CATEGORY, 
+                        $row->NAME_COLLECTION,
+                        $row->FILE_NAME,
+                        $row->IS_ACTIVE,
+                        $row->USER_IN,
+                        $row->ID_CATEGORY,
+                        $row->ID_COLLECTION
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get menu story successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_story_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                $data = $this->Api_model->insert_menu_story($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Story successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert story';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function uploadfoto_story_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $Id_Story = $this->input->post('id_Story', true);
+                $Id_Cat = $this->input->post('id_Cat', true);
+                $Id_Col = $this->input->post('id_Col', true);
+                $edit = $this->input->post('edit', true);
+
+                if($edit == 0){
+                    $nilai = json_decode($_POST['fotoS'], true);
+                }
+                else{
+                    $nilai = json_decode($_POST['fotoSE'], true);
+                }
+
+                foreach($nilai as $key => $value) {
+                    $image = $nilai[$key];
+                    $nomer = $key + 1;
+                    $nama = $Id_Story.'-'.$Id_Cat.'-'.$Id_Col.'('.$nomer.')';
+                    $location = 'story/';
+                    $filename = $nama.'.jpg';
+                    $file = $location . $filename;
+                    
+                    if ( file_exists($file) ) {
+                        unlink($file);
+                    } 
+
+                    $image_parts = explode(';base64,', $image);
+                    $image_base64 = base64_decode($image_parts[1]);
+                   
+
+                    if(file_put_contents($file, $image_base64)){
+                        $data_insert_file = $this->Api_model->upload_foto_story($filename);
+                        $data = array('upload_data' => $file);
+                        $this->set_response($data, REST_Controller::HTTP_CREATED); 
+                    }else{
+                        $error = array('error' => $file);
+                        $this->response($error, REST_Controller::HTTP_BAD_REQUEST);
+                    }
+                    
+                }
+
+
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function auto_IdStory_post() {
+        $data = $this->Api_model->autogen_IdStory();
+        $response['Id_Story'] =  $data;
+        $response['status'] = 'success';
+        $response['message'] = 'Get id story successful';
+        $this->set_response($response, REST_Controller::HTTP_OK);
+    }
+
+    public function update_story_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->edit_menu_Story();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Story successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit story';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_story_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_menu_Story();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Story successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during delete story';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function menu_purchase_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->menu_purchase();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp,
+                        $row->ID_TRANSACTION,
+                        $row->NAME,
+                        $row->GRAND_TOTAL
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get menu purchase successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function detail_purchase_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->purchase_detail();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp,
+                        $row->SUB_TRANSACTION,
+                        $row->NAMA, 
+                        $row->KODE,
+                        $row->PURITY,
+                        $row->WEIGHT,
+                        $row->SEPUH,
+                        $row->SIZE,
+                        $row->QTY,
+                        $row->TOTAL,
+                        $row->NOTE
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get menu purchase successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function edit_valid_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $arr_sub_order = $this->input->post('arr_sub_order', TRUE);
+                $pjg_arr_sub_order = count($this->input->post('arr_sub_order', TRUE));
+                $id_Trans = $this->input->post('id_Trans');
+
+                for($i = 0; $i < $pjg_arr_sub_order; $i++){
+                    $data = $this->Api_model->update_valid($id_Trans, $arr_sub_order[$i]);
+                }
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Valid successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit valid';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_status_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                $data = $this->Api_model->update_status_proses($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Change Status successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during change status';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function edit_validAll_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->update_valid_all();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Edit Valid successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during edit valid';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function cek_product_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $length = $this->Api_model->master_product()->num_rows();
+
+                if ( $length == 0 ) {
+                    $response['status'] = 'add';
+                    $response['message'] = 'product can get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'edit';
+                    $response['message'] = 'product can get in';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function upload_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $product = $this->input->post('code', true);
+                $sub = $this->input->post('sub', true);
+                $finishing = $this->input->post('finishing', true);
+                $nilai = json_decode($_POST['foto'], true);
+                $data_delete_file = $this->Api_model->delete_master_product_file($product,$sub,$finishing);
+                foreach($nilai as $key => $value) {
+                    $image = $nilai[$key];
+                    $nomer = $key + 1;
+                    $nama = $product.'-'.$sub.'-'.$finishing.'('.$nomer.')';
+                    $location = 'product/';
+                    $filename = $nama.'.jpg';
+                    $file = $location . $filename;
+                    
+                    if ( file_exists($file) ) {
+                        unlink($file);
+                    } 
+
+                    $image_parts = explode(';base64,', $image);
+                    $image_base64 = base64_decode($image_parts[1]);
+
+                    if(file_put_contents($file, $image_base64)){
+                        $data_insert_file = $this->Api_model->insert_master_product_file($product,$sub,$finishing,$nomer,$filename);
+                        $data = array('upload_data' => $file);
+                        $this->set_response($data, REST_Controller::HTTP_CREATED); 
+                    }else{
+                        $error = array('error' => $file);
+                        $this->response($error, REST_Controller::HTTP_BAD_REQUEST);
+                    }
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function cek_upload_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $ci=& get_instance();
+		        $code = $this->input->post('code', true);
+                $sub = $this->input->post('sub', true);
+                $finishing = $this->input->post('finishing', true);
+                $q = $ci->db->query(" 
+                        SELECT 
+                            CONCAT('http://','".$_SERVER['HTTP_HOST']."','/ubs_ecommerce_restapi/product/',FILE_NAME) NAMA_FOTO
+                            FROM EC_PRODUCT_PHOTO 
+                            WHERE CODE_PRODUCT = '".$code."' 
+                            AND SUB_PRODUCT = '".$sub."'
+                            AND ID_FINISHING = '".$finishing."'
+                            ORDER BY ORDER_PHOTO
+                    ");
+                $query =  $q->result();
+                $nomer = 0;
+
+                foreach ($query as $row) {
+                    $this->nilai = array();
+                    $imageData = base64_encode(file_get_contents($row->NAMA_FOTO));
+                    $src='data: '.get_mime_by_extension($row->NAMA_FOTO).';base64,'.$imageData;
+                    $this->data[$nomer]=array_merge(
+                                            array("nama_foto"=>($src)),
+                                            array("src"=>($row->NAMA_FOTO))
+                                        )   ;
+                    $nomer=$nomer+1;
+                }
+
+                $data = $this->data;
+                $this->set_response($data, REST_Controller::HTTP_CREATED); 
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function insert_product_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->insert_master_product();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Insert Stones successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during insert stones';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function update_product_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->update_master_product();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Update Product successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during update product';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function delete_product_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->delete_master_product();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Delete Product successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during Delete Product';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_product_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_product();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->CODE_PRODUCT,
+                        $row->SUB_PRODUCT,
+                        $row->NAME_PRODUCT,
+                        $row->CATEGORY,
+                        $row->COLLECTION,
+                        $row->LOCKE,
+                        $row->BODY,
+                        $row->OVERVIEW,
+                        $row->DIVISI,
+                        $row->IS_ACTIVE,
+                        $row->ID_CATEGORY,
+                        $row->ID_COLLECTION,
+                        $row->ID_LOCK
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master product successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_product_purity_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_product_purity();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->PURITY,
+                        $row->WEIGHT
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master purity successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_product_size_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_product_size();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->SIZE
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master size successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_product_stone_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_product_stone();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->SIZE_STONES,
+                        $row->QTY_STONES
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master stone successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_product_finishing_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_product_finishing();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_FINISHING,
+                        $row->NAME_FINISHING
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master stone successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function master_divisi_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->master_divisi();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->KODE_DIVISI,
+                        $row->NAMA_DIVISI
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get master category successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function data_user_validation_get() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->data_user_validation();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_USER,
+                        $row->NAME,
+                        $row->ADDRESS,
+                        $row->EMAIL,
+                        $row->PHONE
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data user validation successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function validate_user_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                
+                $data = $this->Api_model->validate_user($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Validate user successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during validate user';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function validate_user_all_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $tokenData = $decodedToken->iduser;
+                $split = explode('@',$tokenData);
+                $id = $split[0];
+                
+                $data = $this->Api_model->validate_user_all($id);
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Validate user all successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during validate user all';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function user_copy_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->user_copy();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_USER,
+                        $row->NAME
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data user copy successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function menu_user1_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->menu_user1();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_USER,
+                        $row->KODE_MENU,
+                        $row->NAMA_MENU
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data menu user 1 successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function menu_user2_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->menu_user2();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_USER,
+                        $row->KODE_MENU,
+                        $row->NAMA_MENU
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data menu user 2 successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function remove_menu_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->remove_menu();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Remove menu successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during remove menu';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function add_menu_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->add_menu();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Add menu successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during add menu';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function remove_menu_all_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->remove_menu_all();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Remove menu all successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during remove menu all';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function add_menu_all_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->add_menu_all();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Add menu all successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during add menu all';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function menu_user_copy_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = array();
+                $query = $this->Api_model->menu_user_copy();
+                foreach ($query->result() as $row) {
+                    $temp = array();
+                    array_push($temp, 
+                        $row->ID_USER,
+                        $row->KODE_MENU,
+                        $row->NAMA_MENU
+                    );
+                    array_push($data,$temp);
+                }
+
+                $response['data'] = $data;
+                $response['status'] = 'success';
+                $response['message'] = 'Get data menu user copy successful';
+                $this->set_response($response, REST_Controller::HTTP_OK);
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+    public function add_menu_all_copy_post() {
+        $headers = $this->input->request_headers();
+        if (array_key_exists('Authorization', $headers) && !empty($headers['Authorization'])) {
+
+            $decodedToken = AUTHORIZATION::validateToken($headers['Authorization']);
+
+            $tokenIsActive = cek_token($headers['Authorization']);
+
+            if ( ($decodedToken != false) && ($tokenIsActive) ) {
+                $data = $this->Api_model->add_menu_all_copy();
+
+                if ( $data ) {
+                    $response['status'] = 'success';
+                    $response['message'] = 'Add menu all copy successful';
+                    $this->set_response($response, REST_Controller::HTTP_OK);
+                } else {
+                    $response['status'] = 'failed';
+                    $response['message'] = 'An error occurred during add menu all copy';
+                    $this->set_response($response, REST_Controller::HTTP_INTERNAL_SERVER_ERROR);
+                }
+            } else {
+                $response['status'] = 'invalid';
+                $response['message'] = 'Token is invalid or has expired';
+                $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+            }
+        } else {
+            $response['status'] = 'unauthorised';
+            $response['message'] = 'Missing token';
+            $this->set_response($response, REST_Controller::HTTP_UNAUTHORIZED);
+        }
+    }
+
+}
