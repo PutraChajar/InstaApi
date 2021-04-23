@@ -5,17 +5,6 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 class Api_model extends CI_Model {
 
     public function signup() {
-        // $this->input->raw_input_stream;
-        // $email = $this->input->input_stream('email');
-        // $fullname = $this->input->input_stream('fullname');
-        // $username = $this->input->input_stream('username');
-        // $password = $this->input->input_stream('password');
-
-        // $email = $this->input->post('email');
-        // $fullname = $this->input->post('fullname');
-        // $username = $this->input->post('username');
-        // $password = sha1($this->input->post('password'));
-
         $data = json_decode(file_get_contents("php://input"));
         $email = $data->email;
         $fullname = $data->fullname;
@@ -47,7 +36,6 @@ class Api_model extends CI_Model {
     }
 
     public function check_email() {
-        // $email = $this->input->post('email');
         $data = json_decode(file_get_contents("php://input"));
         $email = $data->email;
 
@@ -61,7 +49,6 @@ class Api_model extends CI_Model {
     }
 
     public function check_username() {
-        // $username = $this->input->post('username');
         $data = json_decode(file_get_contents("php://input"));
         $username = $data->username;
         $sql =  "

@@ -56,8 +56,6 @@ class Api extends REST_Controller {
     }
 
     public function signin_post() {
-        // $username = $this->input->post('username');
-        // $password = sha1($this->input->post('password'));
         $form_data = json_decode(file_get_contents("php://input"));
         $username = $form_data->username;
         $password = sha1($form_data->password);
