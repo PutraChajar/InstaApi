@@ -172,10 +172,10 @@ class Api_model extends CI_Model {
                       from `comment`
                       where id_post = a.id_post
                     ) comment,
-                    ( select nvl(count(*),0)
+                    ( select nvl(sum(1),0)
                       from love
                       where id_post = a.id_post
-                      and id_user = a.id_user
+                      and id_user = '".$id."'
                     ) liked
                     from post a
                     where id_user = '".$id."'
