@@ -65,12 +65,12 @@ class Api extends REST_Controller {
         
         if ( $length > 0 ) {
             $tokenData = array();
-            $tokenData['iduser'] = $data['ID_USER'].'@'.now();
+            $tokenData['iduser'] = $data['id_user'].'@'.now();
             $token = AUTHORIZATION::generateToken($tokenData);
             $status = 'success';
             $message = 'Login successful';
 
-            $response['username'] = $data['USERNAME'];
+            $response['username'] = $data['username'];
             $response['jwt'] = $token;
             $response['status'] = $status;
             $response['message'] = $message;

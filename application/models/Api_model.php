@@ -12,20 +12,20 @@ class Api_model extends CI_Model {
         $password = sha1($data->password);
 
         $sql =  "
-                    SELECT CONCAT ( 
+                    select concat ( 
                                 'US' ,
-                                DATE_FORMAT(CURRENT_TIMESTAMP,'%y') ,
-                                LPAD((IFNULL(MAX(SUBSTRING(ID_USER, 5, 6)),0)+1), 6, '0')
-                            ) AS ID_USER 
-                    FROM USER
+                                date_format(current_timestamp,'%y') ,
+                                lpad((ifnull(max(substring(id_user, 5, 6)),0)+1), 6, '0')
+                            ) as id_user 
+                    from user
                 ";
         $exe = $this->db->query($sql);
         $result = $exe->row_array();
-        $id_user = $result["ID_USER"];
+        $id_user = $result["id_user"];
 
         $sql = 	"
-                    INSERT INTO USER (ID_USER , USERNAME , PASSWORD , EMAIL , NAME, DATE_REGISTER)
-                    VALUES ('".$id_user."' , '".$username."' , '".$password."' , '".$email."' , '".$fullname."' , SYSDATE());
+                    insert into user (id_user , username , password , email , name, date_register)
+                    values ('".$id_user."' , '".$username."' , '".$password."' , '".$email."' , '".$fullname."' , sysdate());
                 ";        
         $exe = $this->db->query($sql);
 
@@ -40,9 +40,9 @@ class Api_model extends CI_Model {
         $email = $data->email;
 
         $sql =  "
-                    SELECT ID_USER, EMAIL
-                    FROM USER
-                    WHERE EMAIL = '".$email."'
+                    select id_user, email
+                    from user
+                    where email = '".$email."'
                 ";
         $exe = $this->db->query($sql);
         return $exe;
@@ -52,9 +52,9 @@ class Api_model extends CI_Model {
         $data = json_decode(file_get_contents("php://input"));
         $username = $data->username;
         $sql =  "
-                    SELECT USERNAME
-                    FROM USER
-                    WHERE UPPER(USERNAME) = UPPER('".$username."')
+                    select username
+                    from user
+                    where upper(username) = upper('".$username."')
                 ";
         $exe = $this->db->query($sql);
         return $exe;
@@ -62,10 +62,10 @@ class Api_model extends CI_Model {
 
     public function signin($username,$password) {
         $sql =  "
-                    SELECT ID_USER, USERNAME
-                    FROM USER
-                    WHERE (UPPER(USERNAME) = UPPER('".$username."') OR LOWER(EMAIL) = LOWER('".$username."'))
-                    AND PASSWORD = '".$password."'
+                    select id_user, username
+                    from user
+                    where (upper(username) = upper('".$username."') or lower(email) = lower('".$username."'))
+                    and password = '".$password."'
                 ";
         $exe = $this->db->query($sql);
         return $exe;
@@ -76,15 +76,15 @@ class Api_model extends CI_Model {
         $username = $data->username;
         $sql =  "
                     select id_user, username, email, name, photo,
-                    ( select nvl(sum(1),0)
+                    ( select ifnull(sum(1),0)
                       from followers
                       where id_user = a.id_user
                     ) follower,
-                    ( select nvl(sum(1),0)
+                    ( select ifnull(sum(1),0)
                       from followers
                       where follower = a.id_user
                     ) following,
-                    ( select nvl(sum(1),0)
+                    ( select ifnull(sum(1),0)
                       from post
                       where id_user = a.id_user
                     ) posts
@@ -101,16 +101,17 @@ class Api_model extends CI_Model {
         $username = $data->username;
         $sql =  "
                 select id_post, photo, caption,
-                ( select nvl(sum(1),0)
+                ( select ifnull(sum(1),0)
                   from love
                   where id_post = a.id_post
                 ) love,
-                ( select nvl(sum(1),0)
+                ( select ifnull(sum(1),0)
                   from `comment`
                   where id_post = a.id_post
                 ) comment
                 from post a
                 where id_user = (select id_user from user where username = '".$username."')
+                order by date_post desc
                 ";
         $exe = $this->db->query($sql);
         return $exe;
@@ -123,16 +124,16 @@ class Api_model extends CI_Model {
         $caption = $data->caption;
 
         $sql =  "
-                    SELECT CONCAT ( 
+                    select concat ( 
                                 'PS' ,
-                                DATE_FORMAT(CURRENT_TIMESTAMP,'%y') ,
-                                LPAD((IFNULL(MAX(SUBSTRING(ID_POST, 5, 6)),0)+1), 6, '0')
-                            ) AS ID_POST 
-                    FROM POST
+                                date_format(current_timestamp,'%y') ,
+                                lpad((ifnull(max(substring(id_post, 5, 6)),0)+1), 6, '0')
+                            ) as id_post 
+                    from post
                 ";
         $exe = $this->db->query($sql);
         $result = $exe->row_array();
-        $id_post = $result["ID_POST"];
+        $id_post = $result["id_post"];
 
         $name_photo = $id_post . '.' . $ext;
 
@@ -164,15 +165,15 @@ class Api_model extends CI_Model {
                       from `user`
                       where id_user = a.id_user
                     ) username,
-                    ( select nvl(sum(1),0)
+                    ( select ifnull(sum(1),0)
                       from love
                       where id_post = a.id_post
                     ) love,
-                    ( select nvl(sum(1),0)
+                    ( select ifnull(sum(1),0)
                       from `comment`
                       where id_post = a.id_post
                     ) comment,
-                    ( select nvl(sum(1),0)
+                    ( select ifnull(sum(1),0)
                       from love
                       where id_post = a.id_post
                       and id_user = '".$id."'
@@ -243,16 +244,16 @@ class Api_model extends CI_Model {
         $comment = $data->comment;
 
         $sql =  "
-                    SELECT CONCAT ( 
+                    select concat ( 
                                 'CM' ,
-                                DATE_FORMAT(CURRENT_TIMESTAMP,'%y') ,
-                                LPAD((IFNULL(MAX(SUBSTRING(ID_COMMENT, 5, 6)),0)+1), 6, '0')
-                            ) AS ID_COMMENT 
-                    FROM COMMENT
+                                date_format(current_timestamp,'%y') ,
+                                lpad((ifnull(max(substring(id_comment, 5, 6)),0)+1), 6, '0')
+                            ) as id_comment 
+                    from comment
                 ";
         $exe = $this->db->query($sql);
         $result = $exe->row_array();
-        $id_comment = $result["ID_COMMENT"];
+        $id_comment = $result["id_comment"];
 
         $sql = 	"   
                     insert into comment (id_comment, id_post, id_user, comment, date_comment)
@@ -298,8 +299,8 @@ class Api_model extends CI_Model {
         $name_photo = $iduser . '.' . $ext;
 
         $sql = 	"
-                    UPDATE USER SET PHOTO = '".$name_photo."'
-                    WHERE ID_USER = '".$iduser."'
+                    update user set photo = '".$name_photo."'
+                    where id_user = '".$iduser."'
                 ";        
         $exe = $this->db->query($sql);
 

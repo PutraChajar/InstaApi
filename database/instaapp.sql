@@ -10,7 +10,7 @@ Target Server Type    : MYSQL
 Target Server Version : 50505
 File Encoding         : 65001
 
-Date: 2021-04-23 16:59:24
+Date: 2021-06-11 15:55:22
 */
 
 SET FOREIGN_KEY_CHECKS=0;
@@ -102,3 +102,4 @@ CREATE TABLE `user` (
 INSERT INTO `user` VALUES ('US21000001', 'putra', '4388159474443efc1a78d239ad52aad0f6056d7e', 'putra@gmail.com', 'putra', 'US21000001.png', '2021-04-23 14:14:27');
 INSERT INTO `user` VALUES ('US21000002', 'ibnu', '0c43fb21604c2658cc5ce7a96c867c886ab69894', 'ibnu@gmail.com', 'ibnu', 'US21000002.png', '2021-04-23 14:16:22');
 INSERT INTO `user` VALUES ('US21000003', 'chajar', '27b53e94ff8a2a0b2e7919f4988fefa2240355cd', 'chajar@gmail.com', 'chajar', 'US21000003.png', '2021-04-23 14:23:01');
+INSERT INTO `user` VALUES ('US21000004', 'putrachajar', '10d0b55e0ce96e1ad711adaac266c9200cbc27e4', 'putra.chajar7@gmail.com', 'Putra Ibnu Chajar', 'US21000004.jpeg', '2021-04-23 18:46:38');
